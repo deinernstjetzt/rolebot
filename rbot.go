@@ -8,6 +8,7 @@ import (
   "github.com/bwmarrin/discordgo"
   "syscall"
   "os/signal"
+  "strings"
 )
 
 type Config struct {
@@ -19,6 +20,7 @@ type Config struct {
 type ConfigServer struct {
   ServerID string `json:"serverid"`
   ChannelID string `json:"channelid"`
+  Admin string `json:"adminid"`
   Roles []ConfigRoles `json:"roles"`
 }
 
@@ -99,18 +101,24 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
       ServerID: m.GuildID,
       ChannelID: m.ChannelID,
       Roles: make([]ConfigRoles, 1),
+      Admin: m.Author.ID,
     }
 
     newconfig.Server = append(newconfig.Server, server)
     updateConfig(newconfig)
     fmt.Printf("Added server %v to rbot config\n", m.GuildID)
+    s.ChannelMessageSend(m.ChannelID, "This server has been successfully added")
   }
 
+  if strings.Index(m.Content, "!addrole") == 0 {
+    //fmt.Println(extractEmojiName(m.Message))
+    addRoleToServer(m.Message)
+  }
 }
 
 func reactionAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
   for _, server := range config.Server {
-    if server.ServerID == m.GuildID {
+    if server.ServerID == m.GuildID && server.ChannelID == m.ChannelID {
       for _, role := range server.Roles {
         if role.Emoji == m.Emoji.Name {
           fmt.Printf("Adding role %v to user %v\n", role.Role, m.UserID)
@@ -127,7 +135,7 @@ func reactionAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 
 func reactionRemove(s *discordgo.Session, m *discordgo.MessageReactionRemove) {
   for _, server := range config.Server {
-    if server.ServerID == m.GuildID {
+    if server.ServerID == m.GuildID && server.ChannelID == m.ChannelID {
       for _, role := range server.Roles {
         if role.Emoji == m.Emoji.Name {
           fmt.Printf("Removing role %v from user %v\n", role.Role, m.UserID)
@@ -163,4 +171,101 @@ func updateConfig(newconfig Config) {
   }
 
   config = newconfig
+}
+
+type GenericError struct {}
+func (g GenericError) Error() string {
+  return "error"
+}
+
+func getRoleId(message *discordgo.Message) (s string, e error) {
+  i := strings.Index(message.Content, "<@&")
+
+  if i == -1 {
+    e = GenericError{}
+    return
+  }
+
+  slice := message.Content[i+3:]
+  j := strings.Index(slice, ">")
+
+  if j == -1 {
+    e = GenericError{}
+    return
+  }
+
+  s = slice[:j]
+  return
+}
+
+func extractEmojiName(message *discordgo.Message) (s string, e error) {
+  i := strings.Index(message.Content, "<:")
+
+  if i == -1 {
+    e = GenericError {}
+    return
+  }
+
+  slice := message.Content[i+2:]
+  j := strings.Index(slice, ":")
+
+  if j == -1 {
+    e = GenericError {}
+    return
+  }
+
+  s = slice[:j]
+  return
+}
+
+func addRoleToServer(message *discordgo.Message) error {
+  id, err := getRoleId(message)
+
+  if err != nil {
+    return err
+  }
+
+  emoji, err2 := extractEmojiName(message)
+
+  if err2 != nil {
+    return err
+  }
+
+  roles := ConfigRoles {
+    Emoji: emoji,
+    Role: id,
+  }
+
+  fmt.Println(roles)
+
+  newconfig := config
+  for i, server := range newconfig.Server {
+    if server.ServerID == message.GuildID {
+      newconfig.Server[i].Roles = append(newconfig.Server[i].Roles, roles)
+      updateConfig(newconfig)
+    }
+  }
+
+  return nil
+}
+
+func removeRoleFromServer(message *discordgo.Message) error {
+  id, err := getRoleId(message)
+
+  if err != nil {
+    return err
+  }
+
+  newconfig := config
+  for _, server := range newconfig.Server {
+    if server.ServerID == message.GuildID {
+      for _, role := range server.Roles {
+        if role.Role == id {
+          fmt.Printf("Placeholder: Deleting %v from server\n", id)
+        }
+      }
+    }
+  }
+
+  return nil
 }
