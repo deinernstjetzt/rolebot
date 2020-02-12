@@ -1,0 +1,2 @@
+# rbot
+Role Assignment Bot
