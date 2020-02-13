@@ -21,6 +21,7 @@ type ConfigServer struct {
   ServerID string `json:"serverid"`
   ChannelID string `json:"channelid"`
   Admin string `json:"adminid"`
+  SecondaryAdmins []string `json:"secondary_admins"`
   Roles []ConfigRoles `json:"roles"`
 }
 
@@ -47,6 +48,20 @@ func loadConfig() {
   }
 
   json.Unmarshal(buf, &config)
+}
+
+func (c ConfigServer) isAdmin(userID string) bool {
+  if c.Admin == userID {
+    return true
+  }
+
+  for _, admin := range c.SecondaryAdmins {
+    if userID == admin  {
+      return true
+    }
+  }
+
+  return false
 }
 
 
@@ -123,6 +138,30 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
   if strings.Index(m.Content, "!remrole") == 0 {
     fmt.Println("yoink")
     removeRoleFromServer(m.Message)
+  }
+
+  if strings.Index(m.Content, "!addadmin") == 0 {
+    id, err := extractUserId(m.Message)
+    if err == nil {
+      for i, server := range config.Server {
+        if server.ServerID == m.GuildID && server.isAdmin(m.Author.ID) {
+          config.Server[i].addSecondaryAdmin(id)
+          updateConfig(config)
+        }
+      }
+    }
+  }
+
+  if strings.Index(m.Content, "!remadmin") == 0 {
+    id, err := extractUserId(m.Message)
+    if err == nil {
+      for i, server := range config.Server {
+        if server.ServerID == m.GuildID && server.isAdmin(m.Author.ID) {
+          config.Server[i].removeSecondaryAdmin(id)
+          updateConfig(config)
+        }
+      }
+    }
   }
 }
 
@@ -208,6 +247,26 @@ func getRoleId(message *discordgo.Message) (s string, e error) {
   return
 }
 
+func extractUserId(message *discordgo.Message) (s string, e error) {
+  i := strings.Index(message.Content, "<@!")
+
+  if i == -1 {
+    e = GenericError{}
+    return
+  }
+
+  slice := message.Content[i+3:]
+  j := strings.Index(slice, ">")
+
+  if j == -1 {
+    e = GenericError{}
+    return
+  }
+
+  s = slice[:j]
+  return
+}
+
 func extractEmojiName(message *discordgo.Message) (s string, e error) {
   i := strings.Index(message.Content, "<:")
 
@@ -251,7 +310,7 @@ func addRoleToServer(message *discordgo.Message) error {
   newconfig := config
   for i, server := range newconfig.Server {
     if server.ServerID == message.GuildID {
-      if message.Author.ID == server.Admin {
+      if server.isAdmin(message.Author.ID) {
         newconfig.Server[i].Roles = append(newconfig.Server[i].Roles, roles)
         updateConfig(newconfig)
       } else {
@@ -278,7 +337,7 @@ func removeRoleFromServer(message *discordgo.Message) error {
   newconfig := config
   for i, server := range newconfig.Server {
     if server.ServerID == message.GuildID {
-      if message.Author.ID != server.Admin {
+      if !server.isAdmin(message.Author.ID) {
         fmt.Println("Permission denied")
         return GenericError {}
       }
@@ -289,6 +348,24 @@ func removeRoleFromServer(message *discordgo.Message) error {
           updateConfig(newconfig)
         }
       }
+    }
+  }
+
+  return nil
+}
+
+func (c *ConfigServer) addSecondaryAdmin(userID string) error {
+  c.SecondaryAdmins = append(c.SecondaryAdmins, userID)
+  return nil
+}
+
+func (c *ConfigServer) removeSecondaryAdmin(userID string) error {
+  for i, id := range c.SecondaryAdmins {
+    if id == userID {
+      c.SecondaryAdmins[i], c.SecondaryAdmins[len(c.SecondaryAdmins) - 1] =
+          c.SecondaryAdmins[len(c.SecondaryAdmins) - 1], c.SecondaryAdmins[i]
+
+      c.SecondaryAdmins = c.SecondaryAdmins[:len(c.SecondaryAdmins) - 1]
     }
   }
 
