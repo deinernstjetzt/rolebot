@@ -52,20 +52,21 @@ func loadConfig() {
 
 func main() {
   loadConfig()
-  bot_main()
+  discord, _ := bot_main()
+  defer discord.Close()
   sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 }
 
-func bot_main() {
+func bot_main() (d *discordgo.Session, e error) {
   discord, err := discordgo.New("Bot " + config.Token)
   if err != nil {
     fmt.Println("Failed to connect to discord api")
+    e = err
     return
   }
 
-  defer discord.Close()
   discord.AddHandler(messageCreate)
   discord.AddHandler(reactionAdd)
   discord.AddHandler(reactionRemove)
@@ -73,10 +74,14 @@ func bot_main() {
   err = discord.Open()
   if err != nil {
     fmt.Println("Failed to connect to discord api")
+    e = err
     return
   }
 
   fmt.Println("Bot is booted up and ready!")
+  d = discord
+  e = nil
+  return
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
