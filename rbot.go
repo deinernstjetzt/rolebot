@@ -114,6 +114,11 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
     //fmt.Println(extractEmojiName(m.Message))
     addRoleToServer(m.Message)
   }
+
+  if strings.Index(m.Content, "!remrole") == 0 {
+    fmt.Println("yoink")
+    removeRoleFromServer(m.Message)
+  }
 }
 
 func reactionAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
@@ -241,12 +246,21 @@ func addRoleToServer(message *discordgo.Message) error {
   newconfig := config
   for i, server := range newconfig.Server {
     if server.ServerID == message.GuildID {
-      newconfig.Server[i].Roles = append(newconfig.Server[i].Roles, roles)
-      updateConfig(newconfig)
+      if message.Author.ID == server.Admin {
+        newconfig.Server[i].Roles = append(newconfig.Server[i].Roles, roles)
+        updateConfig(newconfig)
+      } else {
+        fmt.Println("permission denied")
+      }
     }
   }
 
   return nil
+}
+
+func arrayRemove(arr []ConfigRoles, index int) []ConfigRoles {
+  arr[index], arr[len(arr) - 1] = arr[len(arr) - 1], arr[index]
+  return arr[:len(arr) - 1]
 }
 
 func removeRoleFromServer(message *discordgo.Message) error {
@@ -257,11 +271,17 @@ func removeRoleFromServer(message *discordgo.Message) error {
   }
 
   newconfig := config
-  for _, server := range newconfig.Server {
+  for i, server := range newconfig.Server {
     if server.ServerID == message.GuildID {
-      for _, role := range server.Roles {
+      if message.Author.ID != server.Admin {
+        fmt.Println("Permission denied")
+        return GenericError {}
+      }
+      for j, role := range server.Roles {
         if role.Role == id {
-          fmt.Printf("Placeholder: Deleting %v from server\n", id)
+          fmt.Printf("Deleting %v from server\n", id)
+          newconfig.Server[i].Roles = arrayRemove(newconfig.Server[i].Roles, j)
+          updateConfig(newconfig)
         }
       }
     }
