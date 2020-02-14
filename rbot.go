@@ -11,6 +11,12 @@ import (
 	"syscall"
 )
 
+/*
+	Type config holds all information about the bots current
+	servers and a path to its corresponding json file.
+	Config should be updated using Config.updateConfig() so changes
+	will be saved.
+*/
 type Config struct {
 	Token      string         `json:"token"`
 	Game       string         `json:"game"`
@@ -18,6 +24,10 @@ type Config struct {
 	ConfigFile string
 }
 
+/*
+	Type ConfigServer represents one server and holds its
+	Server specific settings.
+*/
 type ConfigServer struct {
 	ServerID        string        `json:"serverid"`
 	ChannelID       string        `json:"channelid"`
@@ -26,6 +36,7 @@ type ConfigServer struct {
 	Roles           []ConfigRoles `json:"roles"`
 }
 
+/* Type ConfigRoles holds a emoji/roleid pair */
 type ConfigRoles struct {
 	Emoji string `json:"emoji"`
 	Role  string `json:"role"`
@@ -71,12 +82,14 @@ func main() {
 	loadConfig()
 	discord, _ := bot_main()
 	defer discord.Close()
+
+	// This basically waits for some Interrupt signal and then stops the bot
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 }
 
-func bot_main() (d *discordgo.Session, e error) {
+func botMain() (d *discordgo.Session, e error) {
 	discord, err := discordgo.New("Bot " + config.Token)
 	if err != nil {
 		fmt.Println("Failed to connect to discord api")
@@ -101,6 +114,7 @@ func bot_main() (d *discordgo.Session, e error) {
 	return
 }
 
+// Function will be called when some message is send
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Content == "!addserver" {
 		config.addServer(m.Message)
@@ -139,9 +153,10 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
+// Will be called when !addserver command was send
 func (c *Config) addServer(m *discordgo.Message) {
 	if config.getServer(m.GuildID) != nil {
-		return //Dont add server that already exist
+		return // Dont add server that already exist
 	}
 
 	server := ConfigServer{
@@ -156,6 +171,7 @@ func (c *Config) addServer(m *discordgo.Message) {
 	fmt.Printf("Server %v has been added to this bot.\n", server.ServerID)
 }
 
+// will be called when discord Reaction add event fires
 func reactionAdd(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 	server := config.getServer(m.GuildID)
 
@@ -202,6 +218,7 @@ func reactionRemove(s *discordgo.Session, m *discordgo.MessageReactionRemove) {
 	}
 }
 
+// Update config function writes the Config struct c to a json file
 func (c Config) updateConfig() {
 	data, err := json.Marshal(c)
 
@@ -232,12 +249,20 @@ func (c *Config) getServer(id string) *ConfigServer {
 	return nil
 }
 
+// GenericError is a placeholder for actual errors
 type GenericError struct{}
 
 func (g GenericError) Error() string {
 	return "error"
 }
 
+/*
+	The next 3 functions extract ids for users, roles and emojis
+	from a message. Discords id's are represented in a string as follows:
+	RoleID: <@&id>
+	UserID: <@!id>
+	EmojiID: <:name:id>		Note that non custom emojis will be send as Unicode runes
+*/
 func extractRoleId(message *discordgo.Message) (s string, e error) {
 	i := strings.Index(message.Content, "<@&")
 
