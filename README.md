@@ -9,7 +9,8 @@ Features:
 
 Commands:
 
-```!addrole @Role :emoji:
+```
+!addrole @Role :emoji:
 !remrole @Role
 !addadmin @NewAdmin
 !remadmin @RemAdmin
