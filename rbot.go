@@ -80,7 +80,7 @@ func (c ConfigServer) isAdmin(userID string) bool {
 
 func main() {
 	loadConfig()
-	discord, _ := bot_main()
+	discord, _ := botMain()
 	defer discord.Close()
 
 	// This basically waits for some Interrupt signal and then stops the bot
